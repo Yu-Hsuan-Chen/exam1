@@ -2,6 +2,7 @@
 #include "uLCD_4DGL.h"
 
 #include <cstdio>
+using namespace std::chrono;
 
 AnalogIn Up(A0);
 AnalogIn Down(A1);
@@ -16,29 +17,25 @@ AnalogOut Aout(D7);
 AnalogIn Ain(A3);
 uLCD_4DGL uLCD(D1, D0, D2); // serial tx, serial rx, reset pin;
 
-DigitalIn Sample(USER_BUTTON);
 
+Timer k;
 
 void LCD();
 void generate_wave(int y);
+void sample();
 
 float ADCdata[20000];
-             
-Timer t;
+int slew;
+int waitting;
+int num;           
+Thread t;
+EventQueue queue(32 * EVENTS_EVENT_SIZE);
 
 int main()
 {
     printf("START! \n\r");  
     
-    // t.start();
-    // int idx = 0;
-    // for (float i = 0.0f; i <= 0.9f; i += 0.01) {
-    //     Aout = i;
-    //     ADCdata[idx++] = Ain;
-    // }
-    // t.stop();
-    // auto us = t.elapsed_time().count();
-    // printf ("Timer time: %llu us\n", us);
+    t.start(callback(&queue, &EventQueue::dispatch_forever));
     LCD();
 
 }
@@ -102,63 +99,81 @@ void LCD() {
 }
 
 void generate_wave(int y) {
-    int slew = 0;
-    int waitting = 0;
+
     switch (y)
     {
     case 93:
     //10hz
         slew = 80000;
         waitting = 80000; 
+        num = 452;
         break;
     //100
     case 78:
         slew = 40000;
-        waitting = 160000;        
+        waitting = 160000;  
+        num = 452;
         break;
     //500
     case 63:
         slew = 20000;
-        waitting = 200000;        
+        waitting = 200000; 
+        num = 453;     
         break;
     case 48:
         slew = 10000;
-        waitting = 220000;        
+        waitting = 220000;    
+        num = 453;   
         break;
     default:
         break;
     }
-    float tmp = (0.9f/slew)*24;
+    float tmp = (0.9f/slew)*530;
 
     printf("Start generate wave form!! \n\r");
+    printf("%d\n\r", num);
     ThisThread::sleep_for(1s);
-    
-    while (Down.read() < 0.9f && Up.read() < 0.9f && Select.read() < 0.9f && Sample == 1) {
-        int idx = 0;
+    int idx = 0;
+    while (Down.read() < 0.9f && Up.read() < 0.9f && Select.read() < 0.9f) {
+        idx = 0;
+        // k.start();
         for (float i = 0.0f; i <= 0.9f; i += tmp) {
             Aout = i;
             ADCdata[idx++] = Ain;
+            wait_us(500);
         }
-        for (int i = 0; i<= (waitting/25); i++) {
+        
+        
+        for (int i = 0; i<= (waitting/532); i++) {
             Aout = 0.9f;
             ADCdata[idx++] = Ain;
+            wait_us(500);
         }
+        
         for (float i = 0.9f; i >= 0.0f; i -= tmp) {
             Aout = i;
             ADCdata[idx++] = Ain;
+            wait_us(500);
         }
+        // k.stop();
+        // auto us = k.elapsed_time().count();
+        // printf("Timer time: %lluus\n", us);
+        // printf("%d\n", idx);
+        // k.reset();
     }  
-
-
-    // printf("Stop generate wave form! \n\r");
-    // if(Sample == 0) {
-    //     printf("Start catching data\n\r");
-    //     ThisThread::sleep_for(200ms);
-    //     for(int i=0; i<samples; i++) {
-    //         printf("%f\n\r", ADCdata[i]);
-    //         ThisThread::sleep_for(200ms);
-    //     }
-    // }
+    printf("Stop generate wave form! \n\r");
+    queue.call(sample);
 
 }
      
+
+void sample() {
+
+    printf("Start catching data\n\r");
+    ThisThread::sleep_for(200ms);
+    for(int i=0; i<num; i++) {
+        printf("%f\n\r", ADCdata[i]);
+        ThisThread::sleep_for(200ms);
+    }
+
+}
